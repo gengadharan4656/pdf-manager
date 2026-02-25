@@ -134,39 +134,13 @@ class DocumentService {
     }
   }
   // ── IMAGE → PDF (VALID) ──────────────────────────────────────────────────
-  Future<Uint8List> _buildImagePdf(Map<String, dynamic> args) async {
-    final paths = args['paths'] as List<String>;
-    final fit = args['fit'] as bool;
-
-    final pdf = pw.Document();
-
-    for (final path in paths) {
-      final bytes = await File(path).readAsBytes();
-      final image = img.decodeImage(bytes)!;
-      final pdfImage = pw.MemoryImage(bytes);
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => pw.Center(
-            child: pw.Image(
-              pdfImage,
-              fit: fit ? pw.BoxFit.contain : pw.BoxFit.none,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return pdf.save();
-  }
   Future<PdfFile> imagesToPdf({
     required List<String> imagePaths,
     required String outputName,
     bool fitToPage = true,
   }) async {
     final pdfBytes = await compute(
-      _buildImagePdf,
+      buildImagePdfInIsolate,
       {
         'paths': imagePaths,
         'fit': fitToPage,
@@ -284,13 +258,14 @@ class DocumentService {
 
 // ── ISOLATE FUNCTION ──────────────────────────────────────────────────────
 
-Future<Uint8List> _buildImagePdf(List<String> imagePaths) async {
+Future<Uint8List> buildImagePdfInIsolate(Map<String, dynamic> args) async {
+  final imagePaths = List<String>.from(args['paths'] as List<dynamic>);
+  final fitToPage = args['fit'] as bool? ?? true;
+
   final pdf = pw.Document();
 
   for (final path in imagePaths) {
     final bytes = await File(path).readAsBytes();
-    final image = img.decodeImage(bytes)!;
-
     final pdfImage = pw.MemoryImage(bytes);
 
     pdf.addPage(
@@ -298,7 +273,10 @@ Future<Uint8List> _buildImagePdf(List<String> imagePaths) async {
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
         build: (_) => pw.Center(
-          child: pw.Image(pdfImage),
+          child: pw.Image(
+            pdfImage,
+            fit: fitToPage ? pw.BoxFit.contain : pw.BoxFit.none,
+          ),
         ),
       ),
     );
