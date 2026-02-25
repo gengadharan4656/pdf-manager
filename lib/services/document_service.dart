@@ -168,6 +168,60 @@ class DocumentService {
   }
   // ── PLACEHOLDERS (SYNCFUSION / NATIVE REQUIRED) ──────────────────────────
 
+
+  Future<PdfFile> createPdfFromText({
+    required String outputName,
+    required String content,
+    String? sourceLabel,
+  }) async {
+    final pdf = pw.Document();
+    final cleanName = outputName.trim().isEmpty ? 'converted_document' : outputName.trim();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (_) => [
+          pw.Text(
+            cleanName,
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          ),
+          if (sourceLabel != null && sourceLabel.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Text(
+              sourceLabel,
+              style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+            ),
+          ],
+          pw.SizedBox(height: 16),
+          pw.Text(
+            content.trim().isEmpty ? 'No readable text extracted from source file.' : content,
+            style: const pw.TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+
+    final pdfBytes = await pdf.save();
+    final dir = await getDocumentsDirectory();
+    final id = newId();
+    final path = '$dir/$id.pdf';
+    await File(path).writeAsBytes(pdfBytes);
+
+    final doc = PdfFile(
+      id: id,
+      name: cleanName,
+      path: path,
+      createdAt: DateTime.now(),
+      modifiedAt: DateTime.now(),
+      sizeBytes: pdfBytes.length,
+      pageCount: 1,
+    );
+
+    await saveDocument(doc);
+    return doc;
+  }
+
   Future<PdfFile> mergePdfs({
     required List<String> pdfPaths,
     required String outputName,

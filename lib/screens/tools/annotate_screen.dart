@@ -1,6 +1,13 @@
 // annotate_screen.dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../widgets/tool_scaffold.dart';
+import '../../services/document_service.dart';
 import 'package:file_picker/file_picker.dart';
 
 class AnnotateScreen extends StatefulWidget {
@@ -169,22 +176,61 @@ class _SignaturePainter extends CustomPainter {
 }
 
 // word_to_pdf_screen.dart
-class WordToPdfScreen extends StatefulWidget {
+class WordToPdfScreen extends ConsumerStatefulWidget {
   const WordToPdfScreen({super.key});
 
   @override
-  State<WordToPdfScreen> createState() => _WordToPdfScreenState();
+  ConsumerState<WordToPdfScreen> createState() => _WordToPdfScreenState();
 }
 
-class _WordToPdfScreenState extends State<WordToPdfScreen> {
+class _WordToPdfScreenState extends ConsumerState<WordToPdfScreen> {
   String? _selectedPath;
   bool _isProcessing = false;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['docx', 'doc', 'pptx', 'ppt', 'odt']);
-    if (result?.files.first.path != null)
+      type: FileType.custom,
+      allowedExtensions: ['docx', 'doc', 'pptx', 'ppt', 'odt'],
+    );
+    if (result?.files.first.path != null) {
       setState(() => _selectedPath = result!.files.first.path);
+    }
+  }
+
+  Future<void> _convert() async {
+    if (_selectedPath == null) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final sourcePath = _selectedPath!;
+      final textContent = await _extractSourceText(sourcePath);
+      final outName = _outputNameFromPath(sourcePath);
+
+      final service = ref.read(documentServiceProvider);
+      final doc = await service.createPdfFromText(
+        outputName: outName,
+        sourceLabel: 'Source: ${File(sourcePath).uri.pathSegments.last}',
+        content: textContent,
+      );
+
+      await ref.read(documentsProvider.notifier).addDocument(doc);
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Converted to PDF!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      context.push('/viewer', extra: doc);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Conversion failed: $e')),
+      );
+    }
   }
 
   @override
@@ -195,21 +241,12 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
       description: 'Convert Word, PowerPoint, and other Office documents to PDF.',
       isProcessing: _isProcessing,
       actionLabel: 'Convert to PDF',
-      onAction: () async {
-        if (_selectedPath == null) return;
-        setState(() => _isProcessing = true);
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Converted to PDF!'),
-                backgroundColor: Colors.green));
-        }
-      },
+      onAction: _convert,
       child: Column(children: [
-        if (_selectedPath == null) _FilePicker(onTap: _pickFile)
-        else _SelectedFile(path: _selectedPath!, onClear: () =>
-            setState(() => _selectedPath = null)),
+        if (_selectedPath == null)
+          _FilePicker(onTap: _pickFile)
+        else
+          _SelectedFile(path: _selectedPath!, onClear: () => setState(() => _selectedPath = null)),
         const SizedBox(height: 16),
         const _SupportedFormatsCard(formats: [
           ('DOCX/DOC', Icons.description, 'Word Documents', Colors.blue),
@@ -222,22 +259,61 @@ class _WordToPdfScreenState extends State<WordToPdfScreen> {
 }
 
 // excel_to_pdf_screen.dart
-class ExcelToPdfScreen extends StatefulWidget {
+class ExcelToPdfScreen extends ConsumerStatefulWidget {
   const ExcelToPdfScreen({super.key});
 
   @override
-  State<ExcelToPdfScreen> createState() => _ExcelToPdfScreenState();
+  ConsumerState<ExcelToPdfScreen> createState() => _ExcelToPdfScreenState();
 }
 
-class _ExcelToPdfScreenState extends State<ExcelToPdfScreen> {
+class _ExcelToPdfScreenState extends ConsumerState<ExcelToPdfScreen> {
   String? _selectedPath;
   bool _isProcessing = false;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['xlsx', 'xls', 'csv', 'ods']);
-    if (result?.files.first.path != null)
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv', 'ods'],
+    );
+    if (result?.files.first.path != null) {
       setState(() => _selectedPath = result!.files.first.path);
+    }
+  }
+
+  Future<void> _convert() async {
+    if (_selectedPath == null) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final sourcePath = _selectedPath!;
+      final textContent = await _extractSourceText(sourcePath);
+      final outName = _outputNameFromPath(sourcePath);
+
+      final service = ref.read(documentServiceProvider);
+      final doc = await service.createPdfFromText(
+        outputName: outName,
+        sourceLabel: 'Source: ${File(sourcePath).uri.pathSegments.last}',
+        content: textContent,
+      );
+
+      await ref.read(documentsProvider.notifier).addDocument(doc);
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Converted to PDF!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      context.push('/viewer', extra: doc);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Conversion failed: $e')),
+      );
+    }
   }
 
   @override
@@ -248,21 +324,12 @@ class _ExcelToPdfScreenState extends State<ExcelToPdfScreen> {
       description: 'Convert Excel and CSV files to PDF documents.',
       isProcessing: _isProcessing,
       actionLabel: 'Convert to PDF',
-      onAction: () async {
-        if (_selectedPath == null) return;
-        setState(() => _isProcessing = true);
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Converted to PDF!'),
-                backgroundColor: Colors.green));
-        }
-      },
+      onAction: _convert,
       child: Column(children: [
-        if (_selectedPath == null) _FilePicker(onTap: _pickFile)
-        else _SelectedFile(path: _selectedPath!, onClear: () =>
-            setState(() => _selectedPath = null)),
+        if (_selectedPath == null)
+          _FilePicker(onTap: _pickFile)
+        else
+          _SelectedFile(path: _selectedPath!, onClear: () => setState(() => _selectedPath = null)),
         const SizedBox(height: 16),
         const _SupportedFormatsCard(formats: [
           ('XLSX/XLS', Icons.table_chart, 'Excel Spreadsheets', Colors.green),
@@ -275,24 +342,85 @@ class _ExcelToPdfScreenState extends State<ExcelToPdfScreen> {
 }
 
 // html_to_pdf_screen.dart
-class HtmlToPdfScreen extends StatefulWidget {
+class HtmlToPdfScreen extends ConsumerStatefulWidget {
   const HtmlToPdfScreen({super.key});
 
   @override
-  State<HtmlToPdfScreen> createState() => _HtmlToPdfScreenState();
+  ConsumerState<HtmlToPdfScreen> createState() => _HtmlToPdfScreenState();
 }
 
-class _HtmlToPdfScreenState extends State<HtmlToPdfScreen> {
+class _HtmlToPdfScreenState extends ConsumerState<HtmlToPdfScreen> {
   final _urlController = TextEditingController();
   bool _isProcessing = false;
   bool _useUrl = true;
   String? _selectedPath;
 
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['html', 'htm', 'txt']);
-    if (result?.files.first.path != null)
+      type: FileType.custom,
+      allowedExtensions: ['html', 'htm', 'txt'],
+    );
+    if (result?.files.first.path != null) {
       setState(() => _selectedPath = result!.files.first.path);
+    }
+  }
+
+  Future<void> _convert() async {
+    setState(() => _isProcessing = true);
+    try {
+      String content;
+      String sourceLabel;
+      String outputName;
+
+      if (_useUrl) {
+        final input = _urlController.text.trim();
+        if (input.isEmpty) {
+          throw 'Enter a valid URL';
+        }
+        content = 'Web conversion placeholder for: $input\n\nOpen this page in backend/cloud rendering for pixel-perfect PDF.';
+        sourceLabel = 'Source URL: $input';
+        outputName = 'web_page_pdf';
+      } else {
+        if (_selectedPath == null) {
+          throw 'Please select an HTML/TXT file';
+        }
+        final sourcePath = _selectedPath!;
+        content = await _extractSourceText(sourcePath);
+        sourceLabel = 'Source: ${File(sourcePath).uri.pathSegments.last}';
+        outputName = _outputNameFromPath(sourcePath);
+      }
+
+      final service = ref.read(documentServiceProvider);
+      final doc = await service.createPdfFromText(
+        outputName: outputName,
+        sourceLabel: sourceLabel,
+        content: content,
+      );
+
+      await ref.read(documentsProvider.notifier).addDocument(doc);
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Converted to PDF!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      context.push('/viewer', extra: doc);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Conversion failed: $e')),
+      );
+    }
   }
 
   @override
@@ -300,53 +428,111 @@ class _HtmlToPdfScreenState extends State<HtmlToPdfScreen> {
     return ToolScaffold(
       title: 'HTML to PDF',
       icon: Icons.web,
-      description: 'Convert web pages or HTML files to PDF documents.',
+      description: 'Convert web pages or HTML/TXT files to PDF documents.',
       isProcessing: _isProcessing,
       actionLabel: 'Convert to PDF',
-      onAction: () async {
-        setState(() => _isProcessing = true);
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Converted to PDF!'),
-                backgroundColor: Colors.green));
-        }
-      },
+      onAction: _convert,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: ElevatedButton(
-            onPressed: () => setState(() => _useUrl = true),
-            style: ElevatedButton.styleFrom(
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => setState(() => _useUrl = true),
+              style: ElevatedButton.styleFrom(
                 backgroundColor: _useUrl ? null : Colors.grey.shade200,
-                foregroundColor: _useUrl ? null : Colors.black87),
-            child: const Text('From URL'))),
+                foregroundColor: _useUrl ? null : Colors.black87,
+              ),
+              child: const Text('From URL'),
+            ),
+          ),
           const SizedBox(width: 8),
-          Expanded(child: ElevatedButton(
-            onPressed: () => setState(() => _useUrl = false),
-            style: ElevatedButton.styleFrom(
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => setState(() => _useUrl = false),
+              style: ElevatedButton.styleFrom(
                 backgroundColor: !_useUrl ? null : Colors.grey.shade200,
-                foregroundColor: !_useUrl ? null : Colors.black87),
-            child: const Text('From File'))),
+                foregroundColor: !_useUrl ? null : Colors.black87,
+              ),
+              child: const Text('From File'),
+            ),
+          ),
         ]),
         const SizedBox(height: 16),
         if (_useUrl)
-          TextField(controller: _urlController,
+          TextField(
+            controller: _urlController,
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'Website URL',
               hintText: 'https://example.com',
               prefixIcon: Icon(Icons.link),
-            ))
+            ),
+          )
         else
           Column(children: [
-            if (_selectedPath == null) _FilePicker(onTap: _pickFile)
-            else _SelectedFile(path: _selectedPath!, onClear: () =>
-                setState(() => _selectedPath = null)),
+            if (_selectedPath == null)
+              _FilePicker(onTap: _pickFile)
+            else
+              _SelectedFile(path: _selectedPath!, onClear: () => setState(() => _selectedPath = null)),
           ]),
       ]),
     );
   }
+}
+
+
+String _outputNameFromPath(String sourcePath) {
+  final source = File(sourcePath).uri.pathSegments.last;
+  final dot = source.lastIndexOf('.');
+  return dot > 0 ? source.substring(0, dot) : source;
+}
+
+Future<String> _extractSourceText(String sourcePath) async {
+  final file = File(sourcePath);
+  if (!await file.exists()) {
+    throw 'Source file not found';
+  }
+
+  final ext = sourcePath.split('.').last.toLowerCase();
+
+  if (['txt', 'csv', 'html', 'htm'].contains(ext)) {
+    return file.readAsString();
+  }
+
+  if (['docx', 'pptx', 'xlsx', 'odt', 'ods'].contains(ext)) {
+    final bytes = await file.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    final xmlBuffers = <String>[];
+
+    for (final entry in archive.files) {
+      final name = entry.name.toLowerCase();
+      if (entry.isFile && name.endsWith('.xml') &&
+          (name.contains('document') ||
+              name.contains('sharedstrings') ||
+              name.contains('slides') ||
+              name.contains('content'))) {
+        final data = entry.content;
+        if (data is List<int>) {
+          xmlBuffers.add(utf8.decode(data, allowMalformed: true));
+        }
+      }
+    }
+
+    if (xmlBuffers.isEmpty) {
+      return 'Could not extract readable text from file.';
+    }
+
+    final xmlText = xmlBuffers.join('\n');
+    return xmlText
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  if (['doc', 'ppt', 'xls'].contains(ext)) {
+    return 'Legacy Office format detected (${ext.toUpperCase()}). Rich parsing requires a native converter SDK.\n\nFile: ${file.uri.pathSegments.last}';
+  }
+
+  return 'Unsupported source format: .$ext';
 }
 
 // grayscale_screen.dart
