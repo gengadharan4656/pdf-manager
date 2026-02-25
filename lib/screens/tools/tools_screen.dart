@@ -280,7 +280,15 @@ class _ToolTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push(tool.route),
+      onTap: () {
+        try {
+          context.push(tool.route);
+        } catch (_) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Route not available: ${tool.route}')),
+          );
+        }
+      },
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),

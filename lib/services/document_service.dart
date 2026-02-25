@@ -134,39 +134,13 @@ class DocumentService {
     }
   }
   // ── IMAGE → PDF (VALID) ──────────────────────────────────────────────────
-  Future<Uint8List> _buildImagePdf(Map<String, dynamic> args) async {
-    final paths = args['paths'] as List<String>;
-    final fit = args['fit'] as bool;
-
-    final pdf = pw.Document();
-
-    for (final path in paths) {
-      final bytes = await File(path).readAsBytes();
-      final image = img.decodeImage(bytes)!;
-      final pdfImage = pw.MemoryImage(bytes);
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (_) => pw.Center(
-            child: pw.Image(
-              pdfImage,
-              fit: fit ? pw.BoxFit.contain : pw.BoxFit.none,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return pdf.save();
-  }
   Future<PdfFile> imagesToPdf({
     required List<String> imagePaths,
     required String outputName,
     bool fitToPage = true,
   }) async {
     final pdfBytes = await compute(
-      _buildImagePdf,
+      buildImagePdfInIsolate,
       {
         'paths': imagePaths,
         'fit': fitToPage,
@@ -193,6 +167,60 @@ class DocumentService {
     return doc;
   }
   // ── PLACEHOLDERS (SYNCFUSION / NATIVE REQUIRED) ──────────────────────────
+
+
+  Future<PdfFile> createPdfFromText({
+    required String outputName,
+    required String content,
+    String? sourceLabel,
+  }) async {
+    final pdf = pw.Document();
+    final cleanName = outputName.trim().isEmpty ? 'converted_document' : outputName.trim();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (_) => [
+          pw.Text(
+            cleanName,
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          ),
+          if (sourceLabel != null && sourceLabel.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Text(
+              sourceLabel,
+              style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+            ),
+          ],
+          pw.SizedBox(height: 16),
+          pw.Text(
+            content.trim().isEmpty ? 'No readable text extracted from source file.' : content,
+            style: const pw.TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+
+    final pdfBytes = await pdf.save();
+    final dir = await getDocumentsDirectory();
+    final id = newId();
+    final path = '$dir/$id.pdf';
+    await File(path).writeAsBytes(pdfBytes);
+
+    final doc = PdfFile(
+      id: id,
+      name: cleanName,
+      path: path,
+      createdAt: DateTime.now(),
+      modifiedAt: DateTime.now(),
+      sizeBytes: pdfBytes.length,
+      pageCount: 1,
+    );
+
+    await saveDocument(doc);
+    return doc;
+  }
 
   Future<PdfFile> mergePdfs({
     required List<String> pdfPaths,
@@ -284,13 +312,14 @@ class DocumentService {
 
 // ── ISOLATE FUNCTION ──────────────────────────────────────────────────────
 
-Future<Uint8List> _buildImagePdf(List<String> imagePaths) async {
+Future<Uint8List> buildImagePdfInIsolate(Map<String, dynamic> args) async {
+  final imagePaths = List<String>.from(args['paths'] as List<dynamic>);
+  final fitToPage = args['fit'] as bool? ?? true;
+
   final pdf = pw.Document();
 
   for (final path in imagePaths) {
     final bytes = await File(path).readAsBytes();
-    final image = img.decodeImage(bytes)!;
-
     final pdfImage = pw.MemoryImage(bytes);
 
     pdf.addPage(
@@ -298,7 +327,10 @@ Future<Uint8List> _buildImagePdf(List<String> imagePaths) async {
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
         build: (_) => pw.Center(
-          child: pw.Image(pdfImage),
+          child: pw.Image(
+            pdfImage,
+            fit: fitToPage ? pw.BoxFit.contain : pw.BoxFit.none,
+          ),
         ),
       ),
     );

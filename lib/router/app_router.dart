@@ -35,6 +35,27 @@ import '../models/pdf_document.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('Page not found')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 56),
+              const SizedBox(height: 12),
+              Text('No route for location: ${state.uri}'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.go('/'),
+                child: const Text('Go Home'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
     routes: [
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:open_file/open_file.dart';
 
 import '../../models/pdf_document.dart';
 import '../../services/document_service.dart';
@@ -25,6 +26,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
 
   bool _showToolbar = true;
   bool _isSearching = false;
+  late final bool _fileExists;
 
   int _currentPage = 1;
   int _pageCount = 1;
@@ -34,7 +36,10 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
   @override
   void initState() {
     super.initState();
-    _incrementOpenCount();
+    _fileExists = File(widget.document.path).existsSync();
+    if (_fileExists) {
+      _incrementOpenCount();
+    }
   }
 
   void _incrementOpenCount() {
@@ -55,42 +60,77 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       appBar: _showToolbar ? _buildAppBar(context) : null,
-      body: GestureDetector(
-        onTap: () => setState(() => _showToolbar = !_showToolbar),
-        child: PdfViewer.file(
-          widget.document.path,
-          controller: _controller,
-          params: PdfViewerParams(
-            backgroundColor: Colors.grey.shade900,
-            margin: 8,
-            maxScale: 8.0,
-            minScale: 0.5,
-            pageDropShadow: const BoxShadow(
-              color: Colors.black54,
-              blurRadius: 8,
-              spreadRadius: 2,
-            ),
-            onViewerReady: (doc, controller) {
-              setState(() {
-                _pageCount = doc.pages.length;
-              });
+      body: _fileExists
+          ? GestureDetector(
+              onTap: () => setState(() => _showToolbar = !_showToolbar),
+              child: PdfViewer.file(
+                widget.document.path,
+                controller: _controller,
+                params: PdfViewerParams(
+                  backgroundColor: Colors.grey.shade900,
+                  margin: 8,
+                  maxScale: 8.0,
+                  minScale: 0.5,
+                  pageDropShadow: const BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                  onViewerReady: (doc, controller) {
+                    setState(() {
+                      _pageCount = doc.pages.length;
+                    });
 
-              if (widget.document.pageCount != _pageCount) {
-                widget.document.pageCount = _pageCount;
-                ref
-                    .read(documentsProvider.notifier)
-                    .updateDocument(widget.document);
-              }
-            },
-            onPageChanged: (page) {
-              if (page != null) {
-                setState(() => _currentPage = page);
-              }
-            },
-          ),
+                    if (widget.document.pageCount != _pageCount) {
+                      widget.document.pageCount = _pageCount;
+                      ref
+                          .read(documentsProvider.notifier)
+                          .updateDocument(widget.document);
+                    }
+                  },
+                  onPageChanged: (page) {
+                    if (page != null) {
+                      setState(() => _currentPage = page);
+                    }
+                  },
+                ),
+              ),
+            )
+          : _buildFileMissingView(context),
+      bottomNavigationBar: _showToolbar && _fileExists ? _buildBottomBar() : null,
+    );
+  }
+
+  Widget _buildFileMissingView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white70, size: 56),
+            const SizedBox(height: 12),
+            const Text(
+              'File not found on device',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.document.path,
+              style: const TextStyle(color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await OpenFile.open(widget.document.path);
+              },
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Try Open Externally'),
+            ),
+          ],
         ),
       ),
-      bottomNavigationBar: _showToolbar ? _buildBottomBar() : null,
     );
   }
 
